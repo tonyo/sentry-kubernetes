@@ -26,6 +26,10 @@ var patternsAll = []*commonMsgPattern{
 		regex:           regexp.MustCompile(`^Readiness probe failed:.*`),
 		fingerprintKeys: []string{},
 	},
+	{
+		regex:           regexp.MustCompile(`^0\/\d nodes are available:.*`),
+		fingerprintKeys: []string{},
+	},
 }
 
 func checkCommonEnhancerPatterns() {
