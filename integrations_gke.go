@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/getsentry/sentry-go"
 )
 
 const instanceMetadataUrl = "http://metadata.google.internal/computeMetadata/v1/instance/attributes/?recursive=true"
 const projectMetadataUrl = "http://metadata.google.internal/computeMetadata/v1/project/?recursive=true"
+
+type IntegrationGKE struct{}
 
 type InstanceMetadata struct {
 	// Allow both types of casing for compatibility
@@ -87,11 +90,13 @@ func readGoogleMetadata(url string, output interface{}) error {
 	return nil
 }
 
-func runGkeIntegration() {
+func (igke *IntegrationGKE) IsEnabled() bool {
+	return isTruthy(os.Getenv("SENTRY_K8S_INTEGRATION_GKE_ENABLED"))
+}
+
+func (igke *IntegrationGKE) Apply() {
 	_, logger := getLoggerWithTag(context.Background(), "integration", "gke")
 	logger.Info().Msg("Running GKE integration")
-
-	scope := sentry.CurrentHub().Scope()
 
 	// Instance metadata
 	var instanceMeta InstanceMetadata
@@ -100,6 +105,8 @@ func runGkeIntegration() {
 		logger.Error().Msgf("Error running GKE integration: %v", err)
 		return
 	}
+
+	scope := sentry.CurrentHub().Scope()
 
 	clusterName := instanceMeta.ClusterName()
 	setTagIfNotEmpty(scope, "gke_cluster_name", clusterName)
@@ -134,4 +141,19 @@ func runGkeIntegration() {
 		"Google Kubernetes Engine",
 		gkeContext,
 	)
+}
+
+func (igke *IntegrationGKE) GetLinkToPodLogs(podName string, namespace string) string {
+	projectName := ""
+	clusterName := ""
+	clusterLocation := ""
+	link := ("https://console.cloud.google.com/logs/query;query=" +
+		"resource.type%3D%22k8s_container%22%0A" +
+		fmt.Sprintf("resource.labels.project_id%3D%22%s%22%0A", projectName) +
+		fmt.Sprintf("resource.labels.location%3D%22%s%22%0A", clusterLocation) +
+		fmt.Sprintf("resource.labels.cluster_name%3D%22%s%22%0A", clusterName) +
+		fmt.Sprintf("resource.labels.namespace_name%3D%22%s%22%0A", namespace) +
+		fmt.Sprintf("resource.labels.pod_name%3D%22%s%22%0A", podName) +
+		";duration=PT1H?project=internal-sentry")
+	return link
 }
