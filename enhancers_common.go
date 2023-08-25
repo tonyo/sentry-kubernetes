@@ -29,6 +29,14 @@ var patternsAll = []*commonMsgPattern{
 		regex:           regexp.MustCompile(`^0\/\d+ nodes are available:.*`),
 		fingerprintKeys: []string{},
 	},
+  {
+		regex:           regexp.MustCompile(`^Liveness probe failed:.*`),
+		fingerprintKeys: []string{},
+	},
+	{
+		regex:           regexp.MustCompile(`(?i)^Exec lifecycle hook .* for Container "(?P<container_name>[^"]+)".*`),
+		fingerprintKeys: []string{"container_name"},
+	},
 }
 
 func checkCommonEnhancerPatterns() {

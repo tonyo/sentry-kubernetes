@@ -16,12 +16,14 @@ import (
 	toolsWatch "k8s.io/client-go/tools/watch"
 )
 
+const podsWatcherName = "pods"
+
 func handlePodTerminationEvent(ctx context.Context, containerStatus *v1.ContainerStatus, pod *v1.Pod, scope *sentry.Scope) *sentry.Event {
-	// logger := zerolog.Ctx(ctx)
+	logger := zerolog.Ctx(ctx)
 
 	state := containerStatus.State.Terminated
 
-	fmt.Printf(">> state: %#v\n", state)
+	logger.Trace().Msgf("Container state: %#v", state)
 	if state.ExitCode == 0 {
 		// Nothing to do
 		return nil
@@ -34,7 +36,7 @@ func handlePodTerminationEvent(ctx context.Context, containerStatus *v1.Containe
 	setTagIfNotEmpty(scope, "pod_name", pod.Name)
 	setTagIfNotEmpty(scope, "container_name", containerStatus.Name)
 
-	// FIXME: we don't have a proper controller at this point, so inventing a new one
+	// FIXME: there's no proper controller we can extract here, so inventing a new one
 	setTagIfNotEmpty(scope, "event_source_component", "x-pod-controller")
 
 	if containerStatusJson, err := prettyJson(containerStatus); err == nil {
@@ -98,6 +100,7 @@ func handlePodWatchEvent(ctx context.Context, event *watch.Event) {
 	}
 
 	containerStatuses := podObject.Status.ContainerStatuses
+	logger.Trace().Msgf("Container statuses: %#v\n", containerStatuses)
 	for _, status := range containerStatuses {
 		state := status.State
 		if state.Terminated == nil {
@@ -105,9 +108,8 @@ func handlePodWatchEvent(ctx context.Context, event *watch.Event) {
 			continue
 		}
 
-		fmt.Printf(">> container status: %#v\n", status)
-
 		hub.WithScope(func(scope *sentry.Scope) {
+			setWatcherTag(scope, podsWatcherName)
 			sentryEvent := handlePodTerminationEvent(ctx, &status, podObject, scope)
 			if sentryEvent != nil {
 				hub.CaptureEvent(sentryEvent)
@@ -165,7 +167,7 @@ func watchPodsInNamespaceForever(ctx context.Context, config *rest.Config, names
 		ctx,
 		map[string]string{
 			"namespace": namespaceTag,
-			"watcher":   "pods",
+			"watcher":   podsWatcherName,
 		},
 	)
 
