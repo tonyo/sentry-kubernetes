@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -27,7 +26,7 @@ var patternsAll = []*commonMsgPattern{
 		fingerprintKeys: []string{},
 	},
 	{
-		regex:           regexp.MustCompile(`^0\/\d nodes are available:.*`),
+		regex:           regexp.MustCompile(`^0\/\d+ nodes are available:.*`),
 		fingerprintKeys: []string{},
 	},
 }
@@ -74,7 +73,6 @@ func matchSinglePattern(ctx context.Context, message string, pattern *commonMsgP
 		}
 		subMatchMap[name] = match[i]
 	}
-	fmt.Println(subMatchMap)
 
 	fingerprint = []string{pat.String()}
 	for _, value := range pattern.fingerprintKeys {
@@ -93,7 +91,9 @@ func matchCommonPatterns(ctx context.Context, scope *sentry.Scope, sentryEvent *
 		fingerprint, matched := matchSinglePattern(ctx, message, pattern)
 		if matched {
 			logger.Trace().Msgf("Pattern match: %v, fingerprint: %v", pattern, fingerprint)
-			scope.SetFingerprint(fingerprint)
+			// Ideally we should set the fingerprint on Scope, but there's no easy way right now to get
+			// fingerprint from the Scope, which is currently needed in theh pod enhancer.
+			sentryEvent.Fingerprint = fingerprint
 			return nil
 		}
 	}
