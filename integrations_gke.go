@@ -8,12 +8,20 @@ import (
 	"os"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/rs/zerolog"
 )
 
 const instanceMetadataUrl = "http://metadata.google.internal/computeMetadata/v1/instance/attributes/?recursive=true"
 const projectMetadataUrl = "http://metadata.google.internal/computeMetadata/v1/project/?recursive=true"
 
-type IntegrationGKE struct{}
+type IntegrationGKE struct {
+	clusterLocation string
+	clusterName     string
+	projectName     string
+	clusterUrl      string
+
+	_initialized bool
+}
 
 type InstanceMetadata struct {
 	// Allow both types of casing for compatibility
@@ -28,6 +36,11 @@ type ProjectMetadata struct {
 	ProjectId2        string `json:"projectId"`
 	NumericProjectId1 int    `json:"numeric-project-id"`
 	NumericProjectId2 int    `json:"numericProjectId"`
+}
+
+func getGkeLogger() *zerolog.Logger {
+	_, logger := getLoggerWithTag(context.Background(), "integration", "gke")
+	return logger
 }
 
 func (im *InstanceMetadata) ClusterName() string {
@@ -94,53 +107,62 @@ func (igke *IntegrationGKE) IsEnabled() bool {
 	return isTruthy(os.Getenv("SENTRY_K8S_INTEGRATION_GKE_ENABLED"))
 }
 
-func (igke *IntegrationGKE) Apply() {
-	_, logger := getLoggerWithTag(context.Background(), "integration", "gke")
-	logger.Info().Msg("Running GKE integration")
+func (igke *IntegrationGKE) Init() error {
+	logger := getGkeLogger()
+	logger.Info().Msg("Initializing GKE integration")
 
 	// Instance metadata
 	var instanceMeta InstanceMetadata
 	err := readGoogleMetadata(instanceMetadataUrl, &instanceMeta)
 	if err != nil {
-		logger.Error().Msgf("Error running GKE integration: %v", err)
-		return
+		return fmt.Errorf("error initializing GKE integration: %v", err)
 	}
-
-	scope := sentry.CurrentHub().Scope()
-
-	clusterName := instanceMeta.ClusterName()
-	setTagIfNotEmpty(scope, "gke_cluster_name", clusterName)
-	clusterLocation := instanceMeta.ClusterLocation()
-	setTagIfNotEmpty(scope, "gke_cluster_location", clusterLocation)
+	igke.clusterName = instanceMeta.ClusterName()
+	igke.clusterLocation = instanceMeta.ClusterLocation()
 
 	// Project metadata
 	var projectMeta ProjectMetadata
 	err = readGoogleMetadata(projectMetadataUrl, &projectMeta)
 	if err != nil {
-		logger.Error().Msgf("Error running GKE integration: %v", err)
-		return
+		return fmt.Errorf("error initializing GKE integration: %v", err)
 	}
+	igke.projectName = projectMeta.ProjectId()
 
-	projectName := projectMeta.ProjectId()
-	setTagIfNotEmpty(scope, "gke_project_name", projectName)
-
-	gkeContext := map[string]interface{}{
-		"Cluster name":     clusterName,
-		"Cluster location": clusterLocation,
-		"GCP project":      projectName,
-	}
-
-	clusterUrl := getClusterUrl(clusterLocation, clusterName, projectName)
-	if clusterUrl != "" {
-		gkeContext["Cluster URL"] = clusterUrl
-	}
-
-	logger.Info().Msgf("GKE Context discovered: %v", gkeContext)
-
-	scope.SetContext(
-		"Google Kubernetes Engine",
-		gkeContext,
+	igke.clusterUrl = getClusterUrl(
+		igke.clusterLocation, igke.clusterName, igke.projectName,
 	)
+
+	igke._initialized = true
+	return nil
+}
+
+func (igke *IntegrationGKE) GetContext() (string, sentry.Context, error) {
+	if !igke._initialized {
+		return "", sentry.Context{}, fmt.Errorf("running GetContext on a non-initialized integration")
+	}
+
+	gkeContext := sentry.Context{
+		"Cluster name":     igke.clusterName,
+		"Cluster location": igke.clusterLocation,
+		"GCP project":      igke.projectName,
+	}
+	if igke.clusterUrl != "" {
+		gkeContext["Cluster URL"] = igke.clusterUrl
+	}
+	return "Google Kubernetes Engine", gkeContext, nil
+}
+
+func (igke *IntegrationGKE) GetTags() (map[string]string, error) {
+	if !igke._initialized {
+		return nil, fmt.Errorf("running GetTags on a non-initialized integration")
+	}
+
+	res := map[string]string{
+		"gke_cluster_name":     igke.clusterName,
+		"gke_cluster_location": igke.clusterLocation,
+		"gke_project_name":     igke.projectName,
+	}
+	return res, nil
 }
 
 func (igke *IntegrationGKE) GetLinkToPodLogs(podName string, namespace string) string {
