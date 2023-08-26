@@ -11,9 +11,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const instanceMetadataUrl = "http://metadata.google.internal/computeMetadata/v1/instance/attributes/?recursive=true"
-const projectMetadataUrl = "http://metadata.google.internal/computeMetadata/v1/project/?recursive=true"
-
 type IntegrationGKE struct {
 	clusterLocation string
 	clusterName     string
@@ -22,6 +19,15 @@ type IntegrationGKE struct {
 
 	_initialized bool
 }
+
+func GetIntegrationGKE() *IntegrationGKE {
+	return &instanceIntegrationGKE
+}
+
+var instanceIntegrationGKE = IntegrationGKE{_initialized: false}
+
+const instanceMetadataUrl = "http://metadata.google.internal/computeMetadata/v1/instance/attributes/?recursive=true"
+const projectMetadataUrl = "http://metadata.google.internal/computeMetadata/v1/project/?recursive=true"
 
 type InstanceMetadata struct {
 	// Allow both types of casing for compatibility
@@ -107,6 +113,10 @@ func (igke *IntegrationGKE) IsEnabled() bool {
 	return isTruthy(os.Getenv("SENTRY_K8S_INTEGRATION_GKE_ENABLED"))
 }
 
+func (igke *IntegrationGKE) IsInitialized() bool {
+	return igke._initialized
+}
+
 func (igke *IntegrationGKE) Init() error {
 	logger := getGkeLogger()
 	logger.Info().Msg("Initializing GKE integration")
@@ -165,17 +175,47 @@ func (igke *IntegrationGKE) GetTags() (map[string]string, error) {
 	return res, nil
 }
 
-func (igke *IntegrationGKE) GetLinkToPodLogs(podName string, namespace string) string {
-	projectName := ""
-	clusterName := ""
-	clusterLocation := ""
+func (igke *IntegrationGKE) getLinkToPodLogs(podName string, namespace string) (string, error) {
+	if !igke._initialized {
+		return "", fmt.Errorf("the integration is not initialized")
+	}
+
+	projectName := igke.projectName
+	clusterName := igke.clusterName
+	clusterLocation := igke.clusterLocation
+
+	if podName == "" || namespace == "" || projectName == "" || clusterName == "" || clusterLocation == "" {
+		return "", nil
+	}
+
 	link := ("https://console.cloud.google.com/logs/query;query=" +
-		"resource.type%3D%22k8s_container%22%0A" +
-		fmt.Sprintf("resource.labels.project_id%3D%22%s%22%0A", projectName) +
-		fmt.Sprintf("resource.labels.location%3D%22%s%22%0A", clusterLocation) +
-		fmt.Sprintf("resource.labels.cluster_name%3D%22%s%22%0A", clusterName) +
-		fmt.Sprintf("resource.labels.namespace_name%3D%22%s%22%0A", namespace) +
-		fmt.Sprintf("resource.labels.pod_name%3D%22%s%22%0A", podName) +
-		";duration=PT1H?project=internal-sentry")
-	return link
+		"resource.type%%3D%%22k8s_container%%22%%0A" +
+		fmt.Sprintf("resource.labels.project_id%%3D%%22%s%%22%%0A", projectName) +
+		fmt.Sprintf("resource.labels.location%%3D%%22%s%%22%%0A", clusterLocation) +
+		fmt.Sprintf("resource.labels.cluster_name%%3D%%22%s%%22%%0A", clusterName) +
+		fmt.Sprintf("resource.labels.namespace_name%%3D%%22%s%%22%%0A", namespace) +
+		fmt.Sprintf("resource.labels.pod_name%%3D%%22%s%%22%%0A", podName) +
+		fmt.Sprintf(";duration=PT1H?project=%s", projectName))
+	return link, nil
+}
+
+func addPodLogLinkToGKEContext(ctx context.Context, scope *sentry.Scope, podName string, namespace string) {
+	logger := zerolog.Ctx(ctx)
+
+	gkeIntegration := GetIntegrationGKE()
+	if !gkeIntegration.IsEnabled() || !gkeIntegration.IsInitialized() {
+		logger.Debug().Msgf("The GKE integration is not enabled or initialized, so not adding/modifying the context")
+		return
+	}
+
+	logLink, err := gkeIntegration.getLinkToPodLogs(podName, namespace)
+	if logLink != "" && err == nil {
+		contextName, gkeContext, err := gkeIntegration.GetContext()
+		if err != nil {
+			logger.Debug().Msgf("Cannot get the context for GKE integration: %v", err)
+			return
+		}
+		gkeContext["Pod Logs"] = logLink
+		scope.SetContext(contextName, gkeContext)
+	}
 }

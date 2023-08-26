@@ -8,6 +8,7 @@ import (
 type AgentIntegration interface {
 	IsEnabled() bool
 	Init() error
+	IsInitialized() bool
 	GetContext() (string, sentry.Context, error)
 	GetTags() (map[string]string, error)
 }
@@ -18,7 +19,7 @@ func runIntegrations() error {
 	scope := sentry.CurrentHub().Scope()
 
 	allIntegrations := []AgentIntegration{
-		&IntegrationGKE{},
+		GetIntegrationGKE(),
 	}
 
 	for _, integration := range allIntegrations {
