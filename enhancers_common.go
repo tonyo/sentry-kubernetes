@@ -29,7 +29,7 @@ var patternsAll = []*commonMsgPattern{
 		regex:           regexp.MustCompile(`^0\/\d+ nodes are available:.*`),
 		fingerprintKeys: []string{},
 	},
-  {
+	{
 		regex:           regexp.MustCompile(`^Liveness probe failed:.*`),
 		fingerprintKeys: []string{},
 	},
