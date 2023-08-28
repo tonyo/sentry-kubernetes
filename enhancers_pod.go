@@ -90,6 +90,10 @@ func runPodEnhancer(ctx context.Context, podMeta *v1.ObjectReference, cachedObje
 		// Standalone pod => most probably it has a unique name
 		sentryEvent.Fingerprint = append(sentryEvent.Fingerprint, podName)
 	}
+
 	logger.Trace().Msgf("Fingerprint after adjustment: %v", sentryEvent.Fingerprint)
+
+	addPodLogLinkToGKEContext(ctx, scope, podName, namespace)
+
 	return nil
 }
