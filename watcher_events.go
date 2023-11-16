@@ -210,13 +210,6 @@ func watchEventsInNamespaceForever(ctx context.Context, config *rest.Config, nam
 
 	ctx = setClientsetOnContext(ctx, clientset)
 
-	if isTruthy(os.Getenv("SENTRY_K8S_MONITOR_CRONJOBS")) {
-		logger.Info().Msgf("Enabling CronJob monitoring")
-		go startCronJobInformer(ctx, namespace)
-	} else {
-		logger.Info().Msgf("CronJob monitoring is disabled")
-	}
-
 	for {
 		if err := watchEventsInNamespace(ctx, namespace, watchSince); err != nil {
 			logger.Error().Msgf("Error while watching events %s: %s", where, err)
