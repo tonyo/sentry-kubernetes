@@ -40,7 +40,9 @@ func handlePodTerminationEvent(ctx context.Context, containerStatus *v1.Containe
 	setTagIfNotEmpty(scope, "event_source_component", "x-pod-controller")
 
 	if containerStatusJson, err := prettyJson(containerStatus); err == nil {
-		scope.SetExtra("Container Status", containerStatusJson)
+		scope.SetContext("Container", sentry.Context{
+			"Status": containerStatusJson,
+		})
 	}
 
 	message := state.Message

@@ -39,26 +39,34 @@ func handleGeneralEvent(ctx context.Context, eventObject *v1.Event, scope *sentr
 	setTagIfNotEmpty(scope, name_tag, involvedObject.Name)
 
 	if source, err := prettyJson(eventObject.Source); err == nil {
-		scope.SetExtra("Event Source", source)
+		scope.SetContext("Event", sentry.Context{
+			"Source": source,
+		})
 	}
 	setTagIfNotEmpty(scope, "event_source_component", eventObject.Source.Component)
 	eventObject.Source = v1.EventSource{}
 
 	if involvedObject, err := prettyJson(eventObject.InvolvedObject); err == nil {
-		scope.SetExtra("Involved Object", involvedObject)
+		scope.SetContext("InvolvedObject", sentry.Context{
+			"Object": involvedObject,
+		})
 	}
 	eventObject.InvolvedObject = v1.ObjectReference{}
 
 	// clean-up the event a bit
 	eventObject.ObjectMeta.ManagedFields = []metav1.ManagedFieldsEntry{}
 	if metadata, err := prettyJson(eventObject.ObjectMeta); err == nil {
-		scope.SetExtra("Event Metadata", metadata)
+		scope.SetContext("Event", sentry.Context{
+			"Metadata": metadata,
+		})
 	}
 	eventObject.ObjectMeta = metav1.ObjectMeta{}
 
 	// The entire (remaining) event
 	if kubeEvent, err := prettyJson(eventObject); err == nil {
-		scope.SetExtra("~ Misc Event Fields", kubeEvent)
+		scope.SetContext("Misc", sentry.Context{
+			"Kube": kubeEvent,
+		})
 	}
 
 	sentryEvent := buildSentryEventFromGeneralEvent(ctx, originalEvent, scope)

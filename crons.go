@@ -11,10 +11,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func runCronsEnhancer(ctx context.Context, scope *sentry.Scope, pod *v1.Pod, sentryEvent *sentry.Event) error {
+func runCronsDataHandler(ctx context.Context, scope *sentry.Scope, pod *v1.Pod, sentryEvent *sentry.Event) error {
 
 	// get owningCronJob if exists
-	owningCronJob, err := getCronJob(ctx, pod, scope)
+	owningCronJob, err := getOwningCronJob(ctx, pod, scope)
 	if err != nil {
 		return err
 	}
@@ -22,7 +22,9 @@ func runCronsEnhancer(ctx context.Context, scope *sentry.Scope, pod *v1.Pod, sen
 		return errors.New("cronjob: pod not created under a cronjob")
 	}
 
-	scope.SetContext("monitor", sentry.Context{"slug": owningCronJob.Name})
+	scope.SetContext("Monitor", sentry.Context{
+		"Slug": owningCronJob.Name,
+	})
 
 	sentryEvent.Fingerprint = append(sentryEvent.Fingerprint, owningCronJob.Kind, owningCronJob.Name)
 
@@ -30,7 +32,7 @@ func runCronsEnhancer(ctx context.Context, scope *sentry.Scope, pod *v1.Pod, sen
 
 	// add breadcrumb with cronJob timestamps
 	scope.AddBreadcrumb(&sentry.Breadcrumb{
-		Message:   fmt.Sprintf("created cronjob %s", owningCronJob.Name),
+		Message:   fmt.Sprintf("Created cronjob %s", owningCronJob.Name),
 		Level:     sentry.LevelInfo,
 		Timestamp: owningCronJob.CreationTimestamp.Time,
 	}, breadcrumbLimit)
@@ -38,14 +40,16 @@ func runCronsEnhancer(ctx context.Context, scope *sentry.Scope, pod *v1.Pod, sen
 	metadataJson, err := prettyJson(owningCronJob.ObjectMeta)
 
 	if err == nil {
-		scope.SetExtra("Cronjob Metadata", metadataJson)
+		scope.SetContext("Cronjob", sentry.Context{
+			"Metadata": metadataJson,
+		})
 	} else {
 		return err
 	}
 	return nil
 }
 
-func getCronJob(ctx context.Context, pod *v1.Pod, scope *sentry.Scope) (*batchv1.CronJob, error) {
+func getOwningCronJob(ctx context.Context, pod *v1.Pod, scope *sentry.Scope) (*batchv1.CronJob, error) {
 
 	clientset, err := getClientsetFromContext(ctx)
 	if err != nil {
