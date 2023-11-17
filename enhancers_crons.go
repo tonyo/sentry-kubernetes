@@ -19,8 +19,10 @@ func runCronsEnhancer(ctx context.Context, scope *sentry.Scope, pod *v1.Pod, sen
 		return err
 	}
 	if owningCronJob == nil {
-		return errors.New("cronJob: pod not created under a cronjob")
+		return errors.New("cronjob: pod not created under a cronjob")
 	}
+
+	scope.SetContext("monitor", sentry.Context{"slug": owningCronJob.Name})
 
 	sentryEvent.Fingerprint = append(sentryEvent.Fingerprint, owningCronJob.Kind, owningCronJob.Name)
 
@@ -40,9 +42,7 @@ func runCronsEnhancer(ctx context.Context, scope *sentry.Scope, pod *v1.Pod, sen
 	} else {
 		return err
 	}
-
 	return nil
-
 }
 
 func getCronJob(ctx context.Context, pod *v1.Pod, scope *sentry.Scope) (*batchv1.CronJob, error) {
