@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 
+	"github.com/rs/zerolog"
 	batchv1 "k8s.io/api/batch/v1"
 
 	"k8s.io/client-go/informers"
@@ -12,7 +12,10 @@ import (
 )
 
 func createJobInformer(ctx context.Context, factory informers.SharedInformerFactory, namespace string) (cache.SharedIndexInformer, error) {
-	fmt.Printf("starting job informer\n")
+
+	logger := zerolog.Ctx(ctx)
+
+	logger.Debug().Msgf("starting job informer\n")
 
 	val := ctx.Value(CronsInformerDataKey{})
 	if val == nil {
@@ -28,10 +31,10 @@ func createJobInformer(ctx context.Context, factory informers.SharedInformerFact
 
 	handler.AddFunc = func(obj interface{}) {
 		job := obj.(*batchv1.Job)
-		fmt.Printf("ADD: Job Added to Store: %s\n", job.GetName())
-		err := runSentryCronsCheckin(ctx, job, "add")
+		logger.Debug().Msgf("ADD: Job Added to Store: %s\n", job.GetName())
+		err := runSentryCronsCheckin(ctx, job, ADD)
 		if err != nil {
-			fmt.Println(err)
+			return
 		}
 	}
 
@@ -41,19 +44,18 @@ func createJobInformer(ctx context.Context, factory informers.SharedInformerFact
 		newJob := newObj.(*batchv1.Job)
 
 		if oldJob.ResourceVersion == newJob.ResourceVersion {
-			fmt.Printf("Informer event: Event sync %s/%s\n", oldJob.GetNamespace(), oldJob.GetName())
+			logger.Debug().Msgf("UPDATE: Event sync %s/%s\n", oldJob.GetNamespace(), oldJob.GetName())
 		} else {
-			runSentryCronsCheckin(ctx, newJob, "update")
+			runSentryCronsCheckin(ctx, newJob, UPDATE)
 		}
 	}
 
 	handler.DeleteFunc = func(obj interface{}) {
 		job := obj.(*batchv1.Job)
-		// fmt.Printf("Informer event: Event DELETED %s/%s\n", cm.GetNamespace(), cm.GetName())
-		fmt.Printf("DELETE: Job deleted from Store: %s\n", job.GetName())
-		err := runSentryCronsCheckin(ctx, job, "delete")
+		logger.Debug().Msgf("DELETE: Job deleted from Store: %s\n", job.GetName())
+		err := runSentryCronsCheckin(ctx, job, DELETE)
 		if err != nil {
-			fmt.Println(err)
+			return
 		}
 	}
 

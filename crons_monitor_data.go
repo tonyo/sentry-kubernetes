@@ -7,12 +7,12 @@ import (
 
 type CronsInformerDataKey struct{}
 
-// struct associated with a job
+// Struct associated with a job
 type CronsJobData struct {
 	CheckinId sentry.EventID
 }
 
-// constructor for cronsMonitorData
+// Constructor for cronsMonitorData
 func NewCronsJobData(checkinId sentry.EventID) *CronsJobData {
 	return &CronsJobData{
 		CheckinId: checkinId,
@@ -23,16 +23,25 @@ func (j *CronsJobData) getCheckinId() sentry.EventID {
 	return j.CheckinId
 }
 
-// struct associated with a cronJob
+// Struct associated with a cronJob
 type CronsMonitorData struct {
-	MonitorSlug   string
-	monitorConfig *sentry.MonitorConfig
-	JobDatas      map[string]*CronsJobData
+	MonitorSlug         string
+	monitorConfig       *sentry.MonitorConfig
+	JobDatas            map[string]*CronsJobData
+	requiredCompletions int32
 }
 
-// constructor for cronsMonitorData
-func NewCronsMonitorData(monitorSlug string, schedule string, maxRunTime int64, checkinMargin int64) *CronsMonitorData {
+// Constructor for cronsMonitorData
+func NewCronsMonitorData(monitorSlug string, schedule string, maxRunTime int64, checkinMargin int64, completions *int32) *CronsMonitorData {
 
+	// Get required number of pods to complete
+	var requiredCompletions int32
+	if completions == nil {
+		// If not set, any pod success is enough
+		requiredCompletions = 1
+	} else {
+		requiredCompletions = *completions
+	}
 	monitorSchedule := sentry.CrontabSchedule(schedule)
 	return &CronsMonitorData{
 		MonitorSlug: monitorSlug,
@@ -41,16 +50,13 @@ func NewCronsMonitorData(monitorSlug string, schedule string, maxRunTime int64, 
 			MaxRuntime:    maxRunTime,
 			CheckInMargin: checkinMargin,
 		},
-		JobDatas: make(map[string]*CronsJobData),
+		JobDatas:            make(map[string]*CronsJobData),
+		requiredCompletions: requiredCompletions,
 	}
 }
 
-// add a job to the crons monitor
+// Add a job to the crons monitor
 func (c *CronsMonitorData) addJob(job *batchv1.Job, checkinId sentry.EventID) error {
 	c.JobDatas[job.Name] = NewCronsJobData(checkinId)
 	return nil
-}
-
-func (c *CronsMonitorData) String() string {
-	return "MonitorSlug: " + c.MonitorSlug
 }

@@ -186,6 +186,7 @@ func watchPodsInNamespaceForever(ctx context.Context, config *rest.Config, names
 
 	ctx = setClientsetOnContext(ctx, clientset)
 
+	// create the informers to integrate with sentry crons
 	if isTruthy(os.Getenv("SENTRY_K8S_MONITOR_CRONJOBS")) {
 		cronsInformerData := make(map[string]CronsMonitorData)
 		ctx := context.WithValue(ctx, CronsInformerDataKey{}, &cronsInformerData)

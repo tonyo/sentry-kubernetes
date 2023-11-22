@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 
+	"github.com/rs/zerolog"
 	batchv1 "k8s.io/api/batch/v1"
 
 	"k8s.io/client-go/informers"
@@ -12,7 +12,10 @@ import (
 )
 
 func createCronjobInformer(ctx context.Context, factory informers.SharedInformerFactory, namespace string) (cache.SharedIndexInformer, error) {
-	fmt.Printf("starting cronJob informer\n")
+
+	logger := zerolog.Ctx(ctx)
+
+	logger.Debug().Msgf("Starting cronJob informer\n")
 
 	val := ctx.Value(CronsInformerDataKey{})
 	if val == nil {
@@ -34,40 +37,24 @@ func createCronjobInformer(ctx context.Context, factory informers.SharedInformer
 
 	handler.AddFunc = func(obj interface{}) {
 		cronjob := obj.(*batchv1.CronJob)
-		fmt.Printf("ADD: CronJob Added to Store: %s\n", cronjob.GetName())
+		logger.Debug().Msgf("ADD: CronJob Added to Store: %s\n", cronjob.GetName())
 		_, ok := (*cronsInformerData)[cronjob.Name]
 		if ok {
-			fmt.Printf("cronJob %s already exists in the crons informer data struct...\n", cronjob.Name)
+			logger.Debug().Msgf("cronJob %s already exists in the crons informer data struct...\n", cronjob.Name)
 		} else {
-			(*cronsInformerData)[cronjob.Name] = *NewCronsMonitorData(cronjob.Name, cronjob.Spec.Schedule, 5, 3)
+			(*cronsInformerData)[cronjob.Name] = *NewCronsMonitorData(cronjob.Name, cronjob.Spec.Schedule, 5, 3, cronjob.Spec.JobTemplate.Spec.Completions)
 		}
 	}
 
-	// handler.UpdateFunc = func(oldObj, newObj interface{}) {
-
-	// 	oldCronjob := oldObj.(*batchv1.CronJob)
-	// 	newCronjob := newObj.(*batchv1.CronJob)
-
-	// 	if oldCronjob.ResourceVersion == newCronjob.ResourceVersion {
-	// 		fmt.Printf("Informer event: Event sync %s/%s\n", oldCronjob.GetNamespace(), oldCronjob.GetName())
-	// 	}
-
-	// 	for _, objRef := range newCronjob.Status.Active {
-	// 		runSentryCronsCheckin(ctx, objRef)
-	// 	}
-
-	// }
-
 	handler.DeleteFunc = func(obj interface{}) {
 		cronjob := obj.(*batchv1.CronJob)
-		// fmt.Printf("Informer event: Event DELETED %s/%s\n", cm.GetNamespace(), cm.GetName())
-		fmt.Printf("DELETE: CronJob deleted from Store: %s\n", cronjob.GetName())
+		logger.Debug().Msgf("DELETE: CronJob deleted from Store: %s\n", cronjob.GetName())
 		_, ok := (*cronsInformerData)[cronjob.Name]
 		if ok {
 			delete((*cronsInformerData), cronjob.Name)
-			fmt.Printf("cronJob %s deleted from the crons informer data struct...\n", cronjob.Name)
+			logger.Debug().Msgf("cronJob %s deleted from the crons informer data struct...\n", cronjob.Name)
 		} else {
-			fmt.Printf("cronJob %s not in the crons informer data struct...\n", cronjob.Name)
+			logger.Debug().Msgf("cronJob %s not in the crons informer data struct...\n", cronjob.Name)
 		}
 	}
 

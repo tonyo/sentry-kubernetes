@@ -91,9 +91,18 @@ func runPodEnhancer(ctx context.Context, podMeta *v1.ObjectReference, cachedObje
 		// The pod is owned by a higher resource
 	} else {
 		// Check if pod is part of cronJob (as grandchild workload resource)
-		err := runCronsDataHandler(ctx, scope, pod, sentryEvent)
+
+		// check if a cronJob
+		var ok bool
+		if pod.OwnerReferences[0].Kind == "Job" {
+			ok, err = runCronsDataHandler(ctx, scope, pod, sentryEvent)
+			if err != nil {
+				return err
+			}
+		}
+
 		// The job is not owned by a cronJob
-		if err != nil {
+		if !ok {
 			owner := pod.OwnerReferences[0]
 			sentryEvent.Fingerprint = append(sentryEvent.Fingerprint, owner.Kind, owner.Name)
 		}
