@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -73,7 +74,12 @@ func handlePodWatchEvent(ctx context.Context, event *watch.Event) {
 	logger := zerolog.Ctx(ctx)
 
 	eventObjectRaw := event.Object
-	// Watch event type: Added, Delete, Bookmark...
+
+	// err := runSentryCronsCheckin(ctx, event)
+	// if err != nil {
+	// 	return
+	// }
+
 	if event.Type != watch.Modified {
 		logger.Debug().Msgf("Skipping a pod watch event of type %s", event.Type)
 		return
@@ -179,6 +185,17 @@ func watchPodsInNamespaceForever(ctx context.Context, config *rest.Config, names
 	}
 
 	ctx = setClientsetOnContext(ctx, clientset)
+
+	if isTruthy(os.Getenv("SENTRY_K8S_MONITOR_CRONJOBS")) {
+		cronsInformerData := make(map[string]CronsMonitorData)
+		ctx := context.WithValue(ctx, CronsInformerDataKey{}, &cronsInformerData)
+		logger.Info().Msgf("Enabling CronJob monitoring")
+
+		go startCronsInformers(ctx, namespace)
+
+	} else {
+		logger.Info().Msgf("CronJob monitoring is disabled")
+	}
 
 	for {
 		if err := watchPodsInNamespace(ctx, namespace); err != nil {
