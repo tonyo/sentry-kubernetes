@@ -22,9 +22,6 @@ func createJobInformer(ctx context.Context, factory informers.SharedInformerFact
 		return nil, errors.New("no crons informer data struct given")
 	}
 
-	done := make(chan struct{})
-	defer close(done)
-
 	jobInformer := factory.Batch().V1().Jobs().Informer()
 
 	var handler cache.ResourceEventHandlerFuncs

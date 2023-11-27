@@ -28,9 +28,6 @@ func createCronjobInformer(ctx context.Context, factory informers.SharedInformer
 		return nil, errors.New("cannot convert cronsInformerData value from context")
 	}
 
-	done := make(chan struct{})
-	defer close(done)
-
 	cronjobInformer := factory.Batch().V1().CronJobs().Informer()
 
 	var handler cache.ResourceEventHandlerFuncs
