@@ -32,7 +32,7 @@ func createJobInformer(ctx context.Context, factory informers.SharedInformerFact
 	handler.AddFunc = func(obj interface{}) {
 		job := obj.(*batchv1.Job)
 		logger.Debug().Msgf("ADD: Job Added to Store: %s\n", job.GetName())
-		err := runSentryCronsCheckin(ctx, job, ADD)
+		err := runSentryCronsCheckin(ctx, job, EventHandlerAdd)
 		if err != nil {
 			return
 		}
@@ -46,14 +46,14 @@ func createJobInformer(ctx context.Context, factory informers.SharedInformerFact
 		if oldJob.ResourceVersion == newJob.ResourceVersion {
 			logger.Debug().Msgf("UPDATE: Event sync %s/%s\n", oldJob.GetNamespace(), oldJob.GetName())
 		} else {
-			runSentryCronsCheckin(ctx, newJob, UPDATE)
+			runSentryCronsCheckin(ctx, newJob, EventHandlerUpdate)
 		}
 	}
 
 	handler.DeleteFunc = func(obj interface{}) {
 		job := obj.(*batchv1.Job)
 		logger.Debug().Msgf("DELETE: Job deleted from Store: %s\n", job.GetName())
-		err := runSentryCronsCheckin(ctx, job, DELETE)
+		err := runSentryCronsCheckin(ctx, job, EventHandlerDelete)
 		if err != nil {
 			return
 		}

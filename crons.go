@@ -18,12 +18,10 @@ import (
 type EventHandlerType string
 
 const (
-	ADD    EventHandlerType = "ADD"
-	UPDATE EventHandlerType = "UPDATE"
-	DELETE EventHandlerType = "DELETE"
+	EventHandlerAdd    EventHandlerType = "ADD"
+	EventHandlerUpdate EventHandlerType = "UPDATE"
+	EventHandlerDelete EventHandlerType = "DELETE"
 )
-
-const slugName = "slug"
 
 // Starts the crons informer which has event handlers
 // adds to the crons monitor data struct used for sending
@@ -102,10 +100,10 @@ func runSentryCronsCheckin(ctx context.Context, job *batchv1.Job, eventHandlerTy
 	}
 
 	// capture checkin event called for by informer handler
-	if eventHandlerType == ADD {
+	if eventHandlerType == EventHandlerAdd {
 		// Add the job to the cronJob informer data
 		checkinJobStarting(ctx, job, cronsMonitorData)
-	} else if eventHandlerType == UPDATE || eventHandlerType == DELETE {
+	} else if eventHandlerType == EventHandlerUpdate || eventHandlerType == EventHandlerDelete {
 		// Delete pod from the cronJob informer data
 		checkinJobEnding(ctx, job, cronsMonitorData)
 	}
@@ -190,7 +188,7 @@ func runCronsDataHandler(ctx context.Context, scope *sentry.Scope, pod *v1.Pod, 
 	}
 
 	scope.SetContext("Monitor", sentry.Context{
-		slugName: owningCronJob.Name,
+		"Slug": owningCronJob.Name,
 	})
 
 	sentryEvent.Fingerprint = append(sentryEvent.Fingerprint, owningCronJob.Kind, owningCronJob.Name)
