@@ -1,5 +1,7 @@
 # sentry-kubernetes
 
+## Archived on 28 November, 2023). Development will continue here: https://github.com/getsentry/sentry-kubernetes
+
 Yet another Sentry Kubernetes agent (should it be called "YASKA"?)
 
 ## Configuration
